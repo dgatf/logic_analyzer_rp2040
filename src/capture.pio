@@ -1,0 +1,72 @@
+/*
+ * Logic Analyzer RP2040-SUMP
+ * Copyright (C) 2023 Daniel Gorbea <danielgorbea@hotmail.com>
+ * 
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ * 
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+.program capture
+.wrap_target
+    nop // in pins pin_count
+.wrap
+
+.program capture_slow
+.wrap_target
+    nop // in pins pin_count
+    nop [31]
+    nop [31]
+    nop [31]
+    nop [31]
+    nop [31]
+    nop [31]
+    nop [31]
+    nop [31]
+    nop [31]
+.wrap
+
+.program trigger_level_high
+    wait 1 pin 0 
+    wait 1 pin 0 
+    push
+halt:
+    jmp halt
+
+.program trigger_level_low
+    wait 0 pin 0
+    wait 0 pin 0
+    push
+halt:
+    jmp halt
+
+.program trigger_edge_high
+    wait 0 pin 0
+    wait 1 pin 0
+    push
+halt:
+    jmp halt
+
+.program trigger_edge_low
+    wait 1 pin 0
+    wait 0 pin 0
+    push
+halt:
+    jmp halt
+
+.program mux
+    pull
+    mov isr osr
+    push
+    irq 0
+halt:
+    jmp halt
