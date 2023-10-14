@@ -43,6 +43,7 @@ extern "C"
     uint get_sample_index(int index);
     uint get_samples_count(void);
     uint get_pre_trigger_count(void);
+    int get_triggered_channel(void);
 
 #ifdef __cplusplus
 }

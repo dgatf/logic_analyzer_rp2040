@@ -41,7 +41,7 @@ int main()
     config_.channels = capture_config_.channels = CHANNEL_COUNT;
 
     // debug init
-    debug_init(&debug_message_[0], &config_.debug);
+    debug_init(115200, &debug_message_[0], &config_.debug);
     debug("\n\nRP2040 Logic Analyzer - v0.1");
     debug("\nConfiguration:"
           "\n-Override trigger edge: %s",
@@ -63,6 +63,11 @@ int main()
         {
             gpio_put(PICO_DEFAULT_LED_PIN, 1);
             capture();
+            debug_block("\nCapture complete. Samples count: %u Pre trigger count: %u ", get_samples_count(), get_pre_trigger_count());
+            if (get_triggered_channel() != -1)
+                debug_block("\nTriggered channel: %u", get_triggered_channel());
+            if (get_pre_trigger_count() < capture_config_.pre_trigger_samples)
+                debug_block("\nWarning. Not enough pre trigger samples. Missing samples (%u) will be sent as 0x0000 samples", capture_config_.pre_trigger_samples - get_pre_trigger_count());
         }
         else if (command == COMMAND_RESET)
         {
@@ -90,11 +95,6 @@ void complete_handler(void)
 {
     is_capturing_ = false;
     send_samples_ = true;
-    debug("\nCapture complete. Samples count: %u Pre trigger count: %u ", get_samples_count(), get_pre_trigger_count());
-    if (get_pre_trigger_count() < capture_config_.pre_trigger_samples)
-    {
-        debug("\nWarning. Not enough pre trigger samples. Missing samples (%u) will be sent as 0x0000 samples", capture_config_.pre_trigger_samples - get_pre_trigger_count());
-    }
 }
 
 void set_pin_config(void)

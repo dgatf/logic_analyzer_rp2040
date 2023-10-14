@@ -29,6 +29,14 @@
 // Number of stages
 #define STAGES_COUNT 4
 
+// Trigger Config
+#define TRIGGER_START                 (1 << (3+24))
+#define TRIGGER_SERIAL                (1 << (2+24))
+#define TRIGGER_CHANNEL_MASK          (31 << (4+16))
+#define TRIGGER_CHANNEL(NUMBER)       (NUMBER << (4+16))
+#define TRIGGER_LEVEL_MASK            (3 << (0+24))
+#define TRIGGER_LEVEL(NUMBER)         (NUMBER << (0+24))
+
 typedef enum sump_flag_bits_t
 {
     FLAG_DEMUX_MODE = (1 << 0),
@@ -48,22 +56,6 @@ typedef enum sump_flag_bits_t
     FLAG_RLE_MODE_0 = (1 << 14),
     FLAG_RLE_MODE_1 = (1 << 15)
 } sump_flag_bits_t;
-
-typedef enum sump_trigger_config_t
-{
-    ARM_MASK = 0x08000000,   // 0 disabled, 1 enabled
-    TYPE_MASK = 0X04000000,  // 0 parallel, 1 serial
-    STAGE_MASK = 0X00030000, // stages 0-3
-    CHANNEL_MASK = 0x00F00000,
-    ARM_ENABLED = 0x08000000,
-    ARM_DISABLED = 0,
-    TYPE_SERIAL = 0X04000000,
-    TYPE_PARALLEL = 0,
-    STAGE_0 = 0x00000000,
-    STAGE_1 = 0x00010000,
-    STAGE_3 = 0x00100000,
-    STAGE_4 = 0x00110000
-} sump_trigger_config_t;
 
 typedef struct sump_trigger_t
 {
@@ -317,10 +309,10 @@ static inline void prepare_adquisition(void)
     {
         capture_config_.trigger[trigger_count].is_enabled = 0;
         debug_block("\nStage: %u Mask: 0x%00000000X Values: 0x%00000000X Configuration: 0x%00000000X", stage, sump_trigger_[stage].mask, sump_trigger_[stage].values, sump_trigger_[stage].configuration);
-        if (sump_trigger_[stage].mask && ((sump_trigger_[stage].configuration & ARM_MASK) && (sump_trigger_[stage].configuration & STAGE_MASK) == 0))
+        if (sump_trigger_[stage].mask && ((sump_trigger_[stage].configuration & TRIGGER_START) && (sump_trigger_[stage].configuration & TRIGGER_LEVEL_MASK) == 0))
         {
             // level triggers (parallel trigger)
-            if ((sump_trigger_[stage].configuration & TYPE_MASK) == TYPE_PARALLEL)
+            if (!(sump_trigger_[stage].configuration & TRIGGER_SERIAL))
             {
                 for (uint channel = 0; channel < config_.channels; channel++)
                 {
@@ -352,10 +344,10 @@ static inline void prepare_adquisition(void)
                 }
             }
             // edge triggers (serial, mask 0b11)
-            else if ((sump_trigger_[stage].configuration & TYPE_MASK) == TYPE_SERIAL && (sump_trigger_[stage].mask == 0b11))
+            else if ((sump_trigger_[stage].configuration & TRIGGER_SERIAL) && (sump_trigger_[stage].mask == 0b11))
             {
                 capture_config_.trigger[trigger_count].is_enabled = true;
-                capture_config_.trigger[trigger_count].pin = (sump_trigger_[stage].configuration & CHANNEL_MASK) >> 20;
+                capture_config_.trigger[trigger_count].pin = (sump_trigger_[stage].configuration & TRIGGER_CHANNEL_MASK) >> 20;
                 if ((sump_trigger_[stage].values & 1) == 0 && ((sump_trigger_[stage].values >> 1) & 1) == 1)
                 {
                     capture_config_.trigger[trigger_count].match = TRIGGER_TYPE_EDGE_HIGH;
@@ -367,10 +359,10 @@ static inline void prepare_adquisition(void)
                     trigger_count++;
                 }
             }
-            else if ((sump_trigger_[stage].configuration & TYPE_MASK) == TYPE_SERIAL && (sump_trigger_[stage].mask == 0b1))
+            else if ((sump_trigger_[stage].configuration & TRIGGER_SERIAL) && (sump_trigger_[stage].mask == 0b1))
             {
                 capture_config_.trigger[trigger_count].is_enabled = true;
-                capture_config_.trigger[trigger_count].pin = (sump_trigger_[stage].configuration & CHANNEL_MASK) >> 20;
+                capture_config_.trigger[trigger_count].pin = (sump_trigger_[stage].configuration & TRIGGER_CHANNEL_MASK) >> 20;
                 if ((sump_trigger_[stage].values & 1) == 1)
                 {
                     capture_config_.trigger[trigger_count].match = TRIGGER_TYPE_LEVEL_HIGH;

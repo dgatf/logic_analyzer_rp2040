@@ -18,16 +18,16 @@
 
 #include "common.h"
 
-char *buffer_;
-bool *is_enabled_;
+static char *buffer_;
+static bool *is_enabled_;
 
-void debug_init(char *buffer, bool *is_enabled)
+void debug_init(uint baudrate, char *buffer, bool *is_enabled)
 {
     buffer_ = buffer;
     is_enabled_ = is_enabled;
-    if (is_enabled_)
+    if (*is_enabled_)
     {
-        uart_init(uart0, 115200);
+        uart_init(uart0, baudrate);
         uart_set_fifo_enabled(uart0, true);
         gpio_set_function(16, GPIO_FUNC_UART);
     }

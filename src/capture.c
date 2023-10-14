@@ -46,7 +46,7 @@ static uint offset_pre_trigger_,
     rate_,
     offset_mux_,
     offset_trigger_[MAX_TRIGGER_COUNT];
-static int pre_trigger_first_;
+static int pre_trigger_first_, triggered_channel_;
 static float clk_div_;
 static volatile uint pio0_ctrl_ = (1 << sm_post_trigger_), pio1_ctrl_ = 0;
 static uint16_t pre_trigger_buffer_[PRE_TRIGGER_BUFFER_SIZE] __attribute__((aligned(PRE_TRIGGER_BUFFER_SIZE * sizeof(uint16_t)))),
@@ -172,14 +172,13 @@ void capture_start(uint samples, uint rate, uint pre_trigger_samples)
     sm_config_set_in_shift(&pio_config_pre_trigger_, false, true, pin_count_);
     sm_config_set_clkdiv(&pio_config_pre_trigger_, clk_div_);
     pio_sm_init(pio0, sm_pre_trigger_, offset_pre_trigger_, &pio_config_pre_trigger_);
-    pio_sm_restart(pio0, sm_pre_trigger_);
     if (rate > RATE_CHANGE_CLK)
         pio0->instr_mem[offset_pre_trigger_] = pio_encode_in(pio_pins, pin_count_);
     else
         pio0->instr_mem[offset_pre_trigger_] = pio_encode_in(pio_pins, pin_count_) | pio_encode_delay(31);
     dma_channel_config channel_config_pre_trigger = dma_channel_get_default_config(dma_channel_pre_trigger_);
     channel_config_set_transfer_data_size(&channel_config_pre_trigger, DMA_SIZE_16);
-    channel_config_set_ring(&channel_config_pre_trigger, true, PRE_TRIGGER_RING_BITS);
+    channel_config_set_ring(&channel_config_pre_trigger, true, PRE_TRIGGER_RING_BITS + 1);
     channel_config_set_write_increment(&channel_config_pre_trigger, true);
     channel_config_set_read_increment(&channel_config_pre_trigger, false);
     channel_config_set_dreq(&channel_config_pre_trigger, pio_get_dreq(pio0, sm_pre_trigger_, false));
@@ -206,7 +205,6 @@ void capture_start(uint samples, uint rate, uint pre_trigger_samples)
     sm_config_set_in_shift(&pio_config_post_trigger_, false, true, pin_count_);
     sm_config_set_clkdiv(&pio_config_post_trigger_, clk_div_);
     pio_sm_init(pio0, sm_post_trigger_, offset_post_trigger_, &pio_config_post_trigger_);
-    pio_sm_restart(pio0, sm_post_trigger_);
     if (rate > RATE_CHANGE_CLK)
         pio0->instr_mem[offset_post_trigger_] = pio_encode_in(pio_pins, pin_count_);
     else
@@ -230,6 +228,7 @@ void capture_start(uint samples, uint rate, uint pre_trigger_samples)
     // init triggers
     trigger_count_ = 0;
     sm_trigger_mask_ = 0;
+    triggered_channel_ = -1;
     uint i = 0;
     while (capture_config_.trigger[i].is_enabled)
     {
@@ -298,6 +297,11 @@ uint get_pre_trigger_count(void)
     return pre_trigger_count_;
 }
 
+int get_triggered_channel(void)
+{
+    return triggered_channel_;
+}
+
 static inline void capture_complete_handler(void)
 {
     if (clock_get_hz(clk_sys) != 100000000)
@@ -307,17 +311,20 @@ static inline void capture_complete_handler(void)
     }
     if (!is_aborting_)
     {
-        capture_stop();
-
         // set pre trigger range
-        pre_trigger_first_ = ((0xffffffff - dma_hw->ch[dma_channel_pre_trigger_].transfer_count) % PRE_TRIGGER_BUFFER_SIZE) - pre_trigger_samples_;
-        pre_trigger_count_ = pre_trigger_samples_;
-        if (pre_trigger_first_ < 0 && (0xffffffff - dma_hw->ch[dma_channel_pre_trigger_].transfer_count) < PRE_TRIGGER_BUFFER_SIZE)
+        pre_trigger_first_ = pre_trigger_count_ = 0;
+        if (pre_trigger_samples_)
         {
-            pre_trigger_first_ = 0;
-            pre_trigger_count_ = 0xffffffff - dma_hw->ch[dma_channel_pre_trigger_].transfer_count;
+            uint transfer_count = 0xffffffff - dma_hw->ch[dma_channel_pre_trigger_].transfer_count;
+            pre_trigger_first_ = (transfer_count % PRE_TRIGGER_BUFFER_SIZE) - pre_trigger_samples_;
+            pre_trigger_count_ = pre_trigger_samples_;
+            if ((pre_trigger_first_ < 0) && (transfer_count < PRE_TRIGGER_BUFFER_SIZE))
+            {
+                pre_trigger_first_ = 0;
+                pre_trigger_count_ = transfer_count;
+            }
         }
-
+        capture_stop();
         is_capturing_ = false;
         handler_();
     }
@@ -330,7 +337,7 @@ static inline void capture_complete_handler(void)
 
 static inline void trigger_handler(void)
 {
-    debug("\nTriggered channel %u", pio_sm_get_blocking(pio0, sm_mux_));
+    triggered_channel_ = pio_sm_get_blocking(pio0, sm_mux_);
     pio_interrupt_clear(pio0, 0);
 }
 
@@ -375,7 +382,7 @@ static bool set_trigger(trigger_t trigger)
             break;
         case TRIGGER_TYPE_EDGE_LOW:
             offset_trigger_[trigger_count_] = pio_add_program(pio1, &trigger_edge_low_program);
-            pio_config_trigger_[trigger_count_] = trigger_edge_high_program_get_default_config(offset_trigger_[trigger_count_]);
+            pio_config_trigger_[trigger_count_] = trigger_edge_low_program_get_default_config(offset_trigger_[trigger_count_]);
             break;
         }
         sm_config_set_clkdiv(&pio_config_trigger_[trigger_count_], clk_div_);

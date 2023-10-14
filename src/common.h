@@ -40,8 +40,8 @@ extern "C"
 
     typedef enum gpio_config_t
     {
-        GPIO_DEBUG_ENABLE = 19,
-        GPIO_TRIGGER_STAGES = 20  // If gpio 20 grounded: triggers are based on stages. If gpio 20 not grounded: all triggers at stage 0 are edge triggers 
+        GPIO_DEBUG_ENABLE = 18,
+        GPIO_TRIGGER_STAGES = 19  // If gpio 20 grounded: triggers are based on stages. If gpio 20 not grounded: all triggers at stage 0 are edge triggers 
     } gpio_config_t;
 
     typedef enum command_t
@@ -82,7 +82,7 @@ extern "C"
         trigger_t trigger[4];
     } capture_config_t;
 
-    void debug_init(char *buffer, bool *is_enabled);
+    void debug_init(uint baudrate, char *buffer, bool *is_enabled);
     void debug_reinit(void);
     void debug(const char *format, ...);
     void debug_block(const char *format, ...);

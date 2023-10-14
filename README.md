@@ -9,7 +9,7 @@ This is a logic analyzer that implements [extended SUMP](http://dangerousprototy
 - 100K samples
 - 1K pre trigger samples
 - Level and edge triggers
-- Up to 4 triggers
+- Up to 4 triggers (1 stage)
 - RLE implemented
 
 ## Usage
@@ -19,6 +19,7 @@ Upload the [binary](bin/logic_analyzer.uf2).
 Connect to a SUMP client:
 
 - [Pulseview](https://github.com/sigrokproject/pulseview)(1)(2).
+- [Sigrok-cli](https://github.com/sigrokproject/sigrok-cli)
 - [Jlac](https://github.com/syntelos/jlac).
 
 (1) Libsigrok has a [bug](https://github.com/sigrokproject/libsigrok/pull/226) when reading from device. Maximum sample rate and maximum sample size in Pulseview selection lists are incorrect. See [fork](https://github.com/dgatf/libsigrok) which fixes the issue.  
@@ -63,7 +64,7 @@ GPIOs 18 and 19 are used to configure the device at boot.
 Connect GPIOs to ground to enable/select.    
 
 __Trigger type__  
-Sump protocol has one trigger type and Pulseview sends first stage triggers only. If GPIO 20 is grounded, triggers are configured based on stages. Otherwise all triggers are trigger edges.  
+Sump protocol has one trigger type and Pulseview sends first stage triggers only.  
 GPIO 19 to GND: triggers based on stages (triggers from Pulseview are level triggers). If not grounded, all are edge triggers.
 
 __Debug mode__  
