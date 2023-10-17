@@ -14,7 +14,7 @@ This is a logic analyzer that implements [extended SUMP](http://dangerousprototy
 
 ## Usage
 
-Upload the [binary](bin/logic_analyzer.uf2).
+Upload the [binary](https://drive.google.com/file/d/1JJ5_vQVWJ0RjmcC2NYjNZ1x6iYy9dHWl/view?usp=drive_link).
 
 Connect to a SUMP client:
 
@@ -41,7 +41,7 @@ Led blinks at boot and during the capture process.
 
 ## Installation
 
-Upload the binary to the RP2040. Drag and drop [logic_analyzer.uf2](bin/logic_analyzer.uf2).
+Upload the binary to the RP2040. Drag and drop [logic_analyzer.uf2](https://drive.google.com/file/d/1JJ5_vQVWJ0RjmcC2NYjNZ1x6iYy9dHWl/view?usp=drive_link).
 
 ## Pulseview
 
