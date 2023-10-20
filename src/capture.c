@@ -32,7 +32,10 @@ static const uint sm_pre_trigger_ = 0,
                   dma_channel_post_trigger_ = 1,
                   dma_channel_pio0_ctrl_ = 2,
                   dma_channel_pio1_ctrl_ = 3,
-                  sm_trigger_[MAX_TRIGGER_COUNT] = {0, 1, 2, 3};
+                  dma_channel_reload_pre_trigger_counter_ = 4,
+                  dma_channel_trigger_[MAX_TRIGGER_COUNT] = {5, 6, 7, 8},
+                  sm_trigger_[MAX_TRIGGER_COUNT] = {0, 1, 2, 3},
+                  reload_counter_ = 0xffffffff;
 static uint offset_pre_trigger_,
     offset_post_trigger_,
     pre_trigger_samples_,
@@ -56,7 +59,7 @@ static pio_sm_config pio_config_trigger_[MAX_TRIGGER_COUNT],
     pio_config_pre_trigger_,
     pio_config_post_trigger_,
     pio_config_mux_;
-static const uint src_[4] = {0, 1, 2, 3};
+static const uint triggered_channel_index_[4] = {0, 1, 2, 3};
 
 static void (*handler_)(void) = NULL;
 
@@ -148,6 +151,19 @@ void capture_start(uint samples, uint rate, uint pre_trigger_samples)
 
     dma_channel_start(dma_channel_pio0_ctrl_);
 
+    // dma channel pre trigger reload counter
+    dma_channel_config config_dma_channel_reload_pre_trigger_counter = dma_channel_get_default_config(dma_channel_reload_pre_trigger_counter_);
+    channel_config_set_transfer_data_size(&config_dma_channel_reload_pre_trigger_counter, DMA_SIZE_32);
+    channel_config_set_write_increment(&config_dma_channel_reload_pre_trigger_counter, false);
+    channel_config_set_read_increment(&config_dma_channel_reload_pre_trigger_counter, false);
+    dma_channel_configure(
+        dma_channel_reload_pre_trigger_counter_,
+        &config_dma_channel_reload_pre_trigger_counter,
+        &dma_hw->ch[dma_channel_pre_trigger_].al1_transfer_count_trig, // write address
+        &reload_counter_,                                              // read address
+        1,
+        false);
+
     // pio mux
     offset_mux_ = pio_add_program(pio0, &mux_program);
     pio_config_mux_ = mux_program_get_default_config(offset_mux_);
@@ -182,6 +198,7 @@ void capture_start(uint samples, uint rate, uint pre_trigger_samples)
     channel_config_set_write_increment(&channel_config_pre_trigger, true);
     channel_config_set_read_increment(&channel_config_pre_trigger, false);
     channel_config_set_dreq(&channel_config_pre_trigger, pio_get_dreq(pio0, sm_pre_trigger_, false));
+    channel_config_set_chain_to(&channel_config_pre_trigger, dma_channel_reload_pre_trigger_counter_);
     dma_channel_configure(
         dma_channel_pre_trigger_,
         &channel_config_pre_trigger,
@@ -351,7 +368,7 @@ static inline void capture_stop(void)
     dma_channel_abort(dma_channel_pio1_ctrl_);
     for (uint i = 0; i < trigger_count_; i++)
     {
-        dma_channel_abort(4 + i);
+        dma_channel_abort(dma_channel_trigger_[i]);
         pio_sm_clear_fifos(pio1, sm_trigger_[i]);
     }
     pio_sm_clear_fifos(pio0, sm_mux_);
@@ -361,9 +378,8 @@ static inline void capture_stop(void)
     pio_clear_instruction_memory(pio1);
 }
 
-static bool set_trigger(trigger_t trigger)
+static inline bool set_trigger(trigger_t trigger)
 {
-    uint dma_channel_trigger = trigger_count_ + 4;
     if (trigger_count_ < MAX_TRIGGER_COUNT)
     {
         switch (trigger.match)
@@ -388,18 +404,18 @@ static bool set_trigger(trigger_t trigger)
         sm_config_set_clkdiv(&pio_config_trigger_[trigger_count_], clk_div_);
         sm_config_set_in_pins(&pio_config_trigger_[trigger_count_], trigger.pin);
         pio_sm_init(pio1, sm_trigger_[trigger_count_], offset_trigger_[trigger_count_], &pio_config_trigger_[trigger_count_]);
-        sm_trigger_mask_ |= 1 << trigger_count_;
+        sm_trigger_mask_ |= 1 << sm_trigger_[trigger_count_];
 
-        dma_channel_config channel_config_trigger = dma_channel_get_default_config(dma_channel_trigger);
+        dma_channel_config channel_config_trigger = dma_channel_get_default_config(dma_channel_trigger_[trigger_count_]);
         channel_config_set_transfer_data_size(&channel_config_trigger, DMA_SIZE_32);
         channel_config_set_write_increment(&channel_config_trigger, false);
         channel_config_set_read_increment(&channel_config_trigger, false);
         channel_config_set_dreq(&channel_config_trigger, pio_get_dreq(pio1, sm_trigger_[trigger_count_], false));
         dma_channel_configure(
-            dma_channel_trigger,
+            dma_channel_trigger_[trigger_count_],
             &channel_config_trigger,
             &pio0->txf[sm_mux_],   // write address
-            &src_[trigger_count_], // read address
+            &triggered_channel_index_[trigger_count_], // read address
             1,
             true);
 
