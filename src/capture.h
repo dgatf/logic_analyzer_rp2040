@@ -20,30 +20,24 @@
 #define CAPTURE
 
 #ifdef __cplusplus
-extern "C"
-{
+extern "C" {
 #endif
 
-#include "hardware/irq.h"
-#include "hardware/dma.h"
-#include "hardware/clocks.h"
-#include "pico/stdlib.h"
 #include "common.h"
-#include "capture.pio.h"
 
-    typedef void (*complete_handler_t)(void);
+typedef void (*complete_handler_t)(void);
 
-    extern capture_config_t capture_config_;
-    extern config_t config_;
+extern capture_config_t capture_config_;
+extern config_t config_;
 
-    void capture_init(uint pin_base, uint pin_count, complete_handler_t handler);
-    void capture_start(uint samples, uint rate, uint pre_trigger_samples);
-    void capture_abort(void);
-    bool capture_is_busy(void);
-    uint get_sample_index(int index);
-    uint get_samples_count(void);
-    uint get_pre_trigger_count(void);
-    int get_triggered_channel(void);
+void capture_init(uint pin_base, uint pin_count, complete_handler_t handler);
+void capture_start(uint samples, uint rate, uint pre_trigger_samples);
+void capture_abort(void);
+bool capture_is_busy(void);
+uint get_sample_index(int index);
+uint get_samples_count(void);
+uint get_pre_trigger_count(void);
+int get_triggered_channel(void);
 
 #ifdef __cplusplus
 }

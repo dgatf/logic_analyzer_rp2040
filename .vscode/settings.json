@@ -1,9 +1,3 @@
 {
-    "files.associations": {
-        "type_traits": "c",
-        "cstdarg": "c",
-        "cstdio": "cpp",
-        "capture.h": "c"
-    },
     "cmake.sourceDirectory": "${workspaceFolder}/src"
 }

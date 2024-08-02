@@ -16,10 +16,11 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "common.h"
 #include "capture.h"
+#include "common.h"
+#include "hardware/clocks.h"
+#include "pico/stdlib.h"
 #include "protocol_sump.h"
-#include "string.h"
 
 volatile bool send_samples_ = false;
 bool is_capturing_;
@@ -31,11 +32,9 @@ void capture(void);
 void complete_handler(void);
 void set_pin_config(void);
 
-int main()
-{
+int main() {
     // init
-    if (clock_get_hz(clk_sys) != 100000000)
-        set_sys_clock_khz(100000, true);
+    if (clock_get_hz(clk_sys) != 100000000) set_sys_clock_khz(100000, true);
     stdio_init_all();
     set_pin_config();
     config_.channels = capture_config_.channels = CHANNEL_COUNT;
@@ -43,9 +42,10 @@ int main()
     // debug init
     debug_init(115200, &debug_message_[0], &config_.debug);
     debug("\n\nRP2040 Logic Analyzer - v0.1");
-    debug("\nConfiguration:"
-          "\n-Override trigger edge: %s",
-          config_.trigger_edge ? "enabled" : "disabled");
+    debug(
+        "\nConfiguration:"
+        "\n-Override trigger edge: %s",
+        config_.trigger_edge ? "enabled" : "disabled");
 
     // led blink
     gpio_init(PICO_DEFAULT_LED_PIN);
@@ -56,28 +56,24 @@ int main()
 
     capture_init(0, capture_config_.channels, complete_handler);
 
-    while (true)
-    {
+    while (true) {
         command_t command = sump_read();
-        if (command == COMMAND_CAPTURE)
-        {
+        if (command == COMMAND_CAPTURE) {
             gpio_put(PICO_DEFAULT_LED_PIN, 1);
             capture();
-            debug_block("\nCapture complete. Samples count: %u Pre trigger count: %u ", get_samples_count(), get_pre_trigger_count());
-            if (get_triggered_channel() != -1)
-                debug_block("\nTriggered channel: %u", get_triggered_channel());
+            debug_block("\nCapture complete. Samples count: %u Pre trigger count: %u ", get_samples_count(),
+                        get_pre_trigger_count());
+            if (get_triggered_channel() != -1) debug_block("\nTriggered channel: %u", get_triggered_channel());
             if (get_pre_trigger_count() < capture_config_.pre_trigger_samples)
-                debug_block("\nWarning. Not enough pre trigger samples. Missing samples (%u) will be sent as 0x0000 samples", capture_config_.pre_trigger_samples - get_pre_trigger_count());
-        }
-        else if (command == COMMAND_RESET)
-        {
-            if (capture_is_busy())
-                capture_abort();
+                debug_block(
+                    "\nWarning. Not enough pre trigger samples. Missing samples (%u) will be sent as 0x0000 samples",
+                    capture_config_.pre_trigger_samples - get_pre_trigger_count());
+        } else if (command == COMMAND_RESET) {
+            if (capture_is_busy()) capture_abort();
             sump_reset();
             gpio_put(PICO_DEFAULT_LED_PIN, 0);
         }
-        if (send_samples_)
-        {
+        if (send_samples_) {
             sump_send_samples();
             gpio_put(PICO_DEFAULT_LED_PIN, 0);
             send_samples_ = false;
@@ -85,20 +81,17 @@ int main()
     }
 }
 
-void capture(void)
-{
+void capture(void) {
     is_capturing_ = true;
     capture_start(capture_config_.total_samples, capture_config_.rate, capture_config_.pre_trigger_samples);
 }
 
-void complete_handler(void)
-{
+void complete_handler(void) {
     is_capturing_ = false;
     send_samples_ = true;
 }
 
-void set_pin_config(void)
-{
+void set_pin_config(void) {
     /*
      *   Connect GPIO to GND at boot to select/enable:
      *   - GPIO 19: triggers based on stages. Otherwise all triggers are trigger edge
@@ -120,8 +113,6 @@ void set_pin_config(void)
     config_.debug = false;
 
     // read pin config
-    if (!gpio_get(GPIO_TRIGGER_STAGES))
-        config_.trigger_edge = false;
-    if (!gpio_get(GPIO_DEBUG_ENABLE))
-        config_.debug = true;
+    if (!gpio_get(GPIO_TRIGGER_STAGES)) config_.trigger_edge = false;
+    if (!gpio_get(GPIO_DEBUG_ENABLE)) config_.debug = true;
 }

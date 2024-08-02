@@ -20,19 +20,17 @@
 #define PROTOCOL_SUMP
 
 #ifdef __cplusplus
-extern "C"
-{
+extern "C" {
 #endif
 
-#include "capture.h"
 #include "common.h"
 
-    extern capture_config_t capture_config_;
-    extern config_t config_;
+extern capture_config_t capture_config_;
+extern config_t config_;
 
-    uint sump_read(void);
-    void sump_send_samples(void);
-    void sump_reset(void);
+uint sump_read(void);
+void sump_send_samples(void);
+void sump_reset(void);
 
 #ifdef __cplusplus
 }
