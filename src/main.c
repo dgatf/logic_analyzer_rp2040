@@ -73,6 +73,10 @@ int main() {
             gpio_put(PICO_DEFAULT_LED_PIN, 0);
         }
         if (send_samples_) {
+            if (clock_get_hz(clk_sys) != 100000000) {
+                set_sys_clock_khz(100000, true);
+                debug_reinit();
+            }
             sump_send_samples();
             gpio_put(PICO_DEFAULT_LED_PIN, 0);
             send_samples_ = false;
