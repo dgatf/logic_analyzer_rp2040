@@ -60,17 +60,17 @@ void capture_init(uint pin_base, uint pin_count, complete_handler_t handler) {
     handler_ = handler;
     pin_count_ = pin_count;
     pin_base_ = pin_base;
-    if (pre_trigger_samples_ > PRE_TRIGGER_BUFFER_SIZE) pre_trigger_samples_ = PRE_TRIGGER_BUFFER_SIZE;
-    if (post_trigger_samples_ > POST_TRIGGER_BUFFER_SIZE) post_trigger_samples_ = POST_TRIGGER_BUFFER_SIZE;
 
-    // init pins
-    for (uint i = 0; i < pin_count; i++) {
-        gpio_set_dir(i, false);
-        gpio_pull_down(i);
+    // Init pins
+    for (uint i = 0; i < pin_count_; i++) {
+        gpio_set_dir(pin_base_ + i, false);
+        gpio_pull_down(pin_base_ + i);
     }
 }
 
 void capture_start(uint samples, uint rate, uint pre_trigger_samples) {
+    if (pre_trigger_samples > samples) pre_trigger_samples = samples;
+
     pre_trigger_samples_ = pre_trigger_samples;
     post_trigger_samples_ = samples - pre_trigger_samples;
     rate_ = rate;
@@ -78,7 +78,7 @@ void capture_start(uint samples, uint rate, uint pre_trigger_samples) {
     if (pre_trigger_samples_ > PRE_TRIGGER_BUFFER_SIZE) pre_trigger_samples_ = PRE_TRIGGER_BUFFER_SIZE;
     if (post_trigger_samples_ > POST_TRIGGER_BUFFER_SIZE) post_trigger_samples_ = POST_TRIGGER_BUFFER_SIZE;
 
-    // set sys clock
+    // Set sys clock
     if (rate > RATE_CHANGE_CLK) {
         if (clock_get_hz(clk_sys) != 200000000) {
             set_sys_clock_khz(200000, true);
@@ -97,7 +97,7 @@ void capture_start(uint samples, uint rate, uint pre_trigger_samples) {
     debug_block("\nSys Clk: %u Clk div (%s): %f", clock_get_hz(clk_sys), rate > RATE_CHANGE_CLK ? "fast" : "slow",
                 clk_div_);
 
-    // dma channel pio0 control: disable pre trigger and enable post trigger
+    // DMA channel pio0 control: disable pre trigger and enable post trigger
     dma_channel_config config_dma_channel_pio0_ctrl = dma_channel_get_default_config(dma_channel_pio0_ctrl_);
     channel_config_set_transfer_data_size(&config_dma_channel_pio0_ctrl, DMA_SIZE_32);
     channel_config_set_write_increment(&config_dma_channel_pio0_ctrl, false);
@@ -109,7 +109,7 @@ void capture_start(uint samples, uint rate, uint pre_trigger_samples) {
                           &pio0_ctrl_,  // read address
                           1, false);
 
-    // dma channel pio1 control: disable mux and triggers
+    // DMA channel pio1 control: disable mux and triggers
     dma_channel_config config_dma_channel_pio1_ctrl = dma_channel_get_default_config(dma_channel_pio1_ctrl_);
     channel_config_set_transfer_data_size(&config_dma_channel_pio1_ctrl, DMA_SIZE_32);
     channel_config_set_write_increment(&config_dma_channel_pio1_ctrl, false);
@@ -121,7 +121,7 @@ void capture_start(uint samples, uint rate, uint pre_trigger_samples) {
 
     dma_channel_start(dma_channel_pio0_ctrl_);
 
-    // dma channel pre trigger reload counter
+    // DMA channel pre trigger reload counter
     dma_channel_config config_dma_channel_reload_pre_trigger_counter =
         dma_channel_get_default_config(dma_channel_reload_pre_trigger_counter_);
     channel_config_set_transfer_data_size(&config_dma_channel_reload_pre_trigger_counter, DMA_SIZE_32);
@@ -132,7 +132,7 @@ void capture_start(uint samples, uint rate, uint pre_trigger_samples) {
                           &reload_counter_,                                               // read address
                           1, false);
 
-    // pio mux
+    // PIO mux
     offset_mux_ = pio_add_program(pio0, &mux_program);
     pio_config_mux_ = mux_program_get_default_config(offset_mux_);
     sm_config_set_clkdiv(&pio_config_mux_, 1);
@@ -141,7 +141,7 @@ void capture_start(uint samples, uint rate, uint pre_trigger_samples) {
     irq_set_exclusive_handler(PIO0_IRQ_0, trigger_handler);
     irq_set_enabled(PIO0_IRQ_0, true);
 
-    // init pre trigger
+    // Init pre trigger
     if (rate > RATE_CHANGE_CLK) {
         offset_pre_trigger_ = pio_add_program(pio0, &capture_program);
         pio_config_pre_trigger_ = capture_program_get_default_config(offset_pre_trigger_);
@@ -169,7 +169,7 @@ void capture_start(uint samples, uint rate, uint pre_trigger_samples) {
                           &pio0->rxf[sm_pre_trigger_],  // read address
                           0xffffffff, true);
 
-    // init post trigger
+    // Init post trigger
     if (rate > RATE_CHANGE_CLK) {
         offset_post_trigger_ = pio_add_program(pio0, &capture_program);
         pio_config_post_trigger_ = capture_program_get_default_config(offset_post_trigger_);
@@ -190,8 +190,7 @@ void capture_start(uint samples, uint rate, uint pre_trigger_samples) {
     channel_config_set_write_increment(&channel_config_post_trigger, true);
     channel_config_set_read_increment(&channel_config_post_trigger, false);
     channel_config_set_dreq(&channel_config_post_trigger, pio_get_dreq(pio0, sm_post_trigger_, false));
-    dma_channel_set_irq0_enabled(dma_channel_post_trigger_,
-                                 true);  // raise an interrupt when completed
+    dma_channel_set_irq0_enabled(dma_channel_post_trigger_, true);  // raise an interrupt when completed
     irq_set_exclusive_handler(DMA_IRQ_0, capture_complete_handler);
     irq_set_enabled(DMA_IRQ_0, true);
     dma_channel_configure(dma_channel_post_trigger_, &channel_config_post_trigger,
@@ -199,7 +198,7 @@ void capture_start(uint samples, uint rate, uint pre_trigger_samples) {
                           &pio0->rxf[sm_post_trigger_],  // read address
                           post_trigger_samples_, true);
 
-    // init triggers
+    // Init triggers
     trigger_count_ = 0;
     sm_trigger_mask_ = 0;
     triggered_channel_ = -1;
@@ -209,7 +208,7 @@ void capture_start(uint samples, uint rate, uint pre_trigger_samples) {
         i++;
     }
 
-    // start state machines
+    // Start state machines
     if (!sm_trigger_mask_) {
         pio_sm_set_enabled(pio0, sm_post_trigger_, true);
     } else {
@@ -237,16 +236,22 @@ void capture_abort(void) {
 bool capture_is_busy(void) { return is_capturing_; }
 
 uint get_sample_index(int index) {
-    if (index < 0 || index > pre_trigger_count_ + post_trigger_samples_) return 0;
-    if (index < pre_trigger_count_) {
-        if (pre_trigger_first_ + index < 0)
-            return pre_trigger_buffer_[PRE_TRIGGER_BUFFER_SIZE + pre_trigger_first_ + index];
-        else if (pre_trigger_first_ + index > PRE_TRIGGER_BUFFER_SIZE)
-            return pre_trigger_buffer_[pre_trigger_first_ + index - PRE_TRIGGER_BUFFER_SIZE];
-        else
-            return pre_trigger_buffer_[pre_trigger_first_ + index];
+    uint total_samples = pre_trigger_count_ + post_trigger_samples_;
+
+    if (index < 0 || (uint)index >= total_samples) return 0;
+
+    if ((uint)index < pre_trigger_count_) {
+        int pos = pre_trigger_first_ + index;
+
+        if (pos < 0)
+            pos += PRE_TRIGGER_BUFFER_SIZE;
+        else if (pos >= PRE_TRIGGER_BUFFER_SIZE)
+            pos -= PRE_TRIGGER_BUFFER_SIZE;
+
+        return pre_trigger_buffer_[pos];
     }
-    return post_trigger_buffer_[index - pre_trigger_count_];
+
+    return post_trigger_buffer_[index - (int)pre_trigger_count_];
 }
 
 uint get_samples_count(void) { return pre_trigger_count_ + post_trigger_samples_; }
@@ -261,11 +266,12 @@ static inline void capture_complete_handler(void) {
         debug_reinit();
     }
     if (!is_aborting_) {
-        // set pre trigger range
-        pre_trigger_first_ = pre_trigger_count_ = 0;
+        // Set pre trigger range
+        pre_trigger_first_ = 0;
+        pre_trigger_count_ = 0;
         if (pre_trigger_samples_) {
             uint transfer_count = 0xffffffff - dma_hw->ch[dma_channel_pre_trigger_].transfer_count;
-            pre_trigger_first_ = (transfer_count % PRE_TRIGGER_BUFFER_SIZE) - pre_trigger_samples_;
+            pre_trigger_first_ = (int)(transfer_count % PRE_TRIGGER_BUFFER_SIZE) - (int)pre_trigger_samples_;
             pre_trigger_count_ = pre_trigger_samples_;
             if ((pre_trigger_first_ < 0) && (transfer_count < PRE_TRIGGER_BUFFER_SIZE)) {
                 pre_trigger_first_ = 0;

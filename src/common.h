@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef COMMON
-#define COMMON
+#ifndef COMMON_H
+#define COMMON_H
 
 #ifdef __cplusplus
 extern "C" {

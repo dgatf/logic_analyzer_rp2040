@@ -23,7 +23,6 @@
 #include "protocol_sump.h"
 
 volatile bool send_samples_ = false;
-bool is_capturing_;
 char debug_message_[DEBUG_BUFFER_SIZE];
 config_t config_;
 capture_config_t capture_config_;
@@ -63,7 +62,7 @@ int main() {
             capture();
             debug_block("\nCapture complete. Samples count: %u Pre trigger count: %u ", get_samples_count(),
                         get_pre_trigger_count());
-            if (get_triggered_channel() != -1) debug_block("\nTriggered channel: %u", get_triggered_channel());
+            if (get_triggered_channel() != -1) debug_block("\nTriggered channel: %d", get_triggered_channel());
             if (get_pre_trigger_count() < capture_config_.pre_trigger_samples)
                 debug_block(
                     "\nWarning. Not enough pre trigger samples. Missing samples (%u) will be sent as 0x0000 samples",
@@ -82,12 +81,10 @@ int main() {
 }
 
 void capture(void) {
-    is_capturing_ = true;
     capture_start(capture_config_.total_samples, capture_config_.rate, capture_config_.pre_trigger_samples);
 }
 
 void complete_handler(void) {
-    is_capturing_ = false;
     send_samples_ = true;
 }
 

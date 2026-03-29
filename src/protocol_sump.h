@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef PROTOCOL_SUMP
-#define PROTOCOL_SUMP
+#ifndef PROTOCOL_SUMP_H
+#define PROTOCOL_SUMP_H
 
 #ifdef __cplusplus
 extern "C" {

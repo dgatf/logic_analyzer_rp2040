@@ -16,8 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef CAPTURE
-#define CAPTURE
+#ifndef CAPTURE_H
+#define CAPTURE_H
 
 #ifdef __cplusplus
 extern "C" {

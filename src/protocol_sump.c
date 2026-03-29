@@ -181,7 +181,7 @@ uint sump_read(void) {
                 break;
             case 0x80:  // divisor
                 divisor_ = get_uint32();
-                debug_block("\nRead divisor (0x%X): %u", c, divisor_, capture_config_.rate);
+                debug_block("\nRead divisor (0x%X): %u", c, divisor_);
                 break;
             case 0x81:  // sample size & pre trigger size
             {
@@ -225,7 +225,7 @@ uint sump_read(void) {
                 break;
             }
             default:
-                debug_block("\nUnknoun command: 0x%X", c);
+                debug_block("\nUnknown command: 0x%X", c);
                 break;
         }
     }
@@ -236,24 +236,25 @@ void sump_send_samples(void) {
     debug("\nSend samples. RLE %s", flags_ & FLAG_RLE ? "enabled" : "disabled");
     int min_index = get_samples_count() - capture_config_.total_samples;
 
-    if ((flags_ & FLAG_RLE))  // send samples with RLE compression
-    {
-        uint channelgroup_mask;
+    if ((flags_ & FLAG_RLE)) {
+        uint channelgroup_mask = 0;
         if ((flags_ & FLAG_DISABLE_CHANGROUP_1) == 0) channelgroup_mask = 0xff;
         if ((flags_ & FLAG_DISABLE_CHANGROUP_2) == 0) channelgroup_mask |= 0xff << 8;
+
         int samples_count = get_samples_count();
         int index = samples_count - 1;
         uint sample = get_sample_index(index) & channelgroup_mask;
         uint sample_prev = sample;
-        uint sample_rle = sample;
         uint rle_max_count = (flags_ & FLAG_DISABLE_CHANGROUP_1) || (flags_ & FLAG_DISABLE_CHANGROUP_2)
                                  ? (0xff >> 1) + 1
                                  : (0xffff >> 1) + 1;
+
         while (index > min_index) {
             if (sump_read() == COMMAND_RESET) {
                 debug("\nCapture aborted");
                 return;
             }
+
             uint rle_count = 0;
             do {
                 index--;
@@ -261,11 +262,10 @@ void sump_send_samples(void) {
                 sample_prev = sample;
                 sample = get_sample_index(index) & channelgroup_mask;
             } while ((sample == sample_prev) && index >= min_index && rle_count < rle_max_count);
+
             send_sample_rle(sample_prev, rle_count);
-            sample_rle = sample;
         }
-    } else  // send samples raw data
-    {
+    } else {
         for (int i = get_samples_count() - 1; i >= min_index; i--) {
             if (sump_read() == COMMAND_RESET) {
                 debug("\nCapture aborted");
@@ -289,35 +289,42 @@ void sump_reset(void) {
 
 static inline void prepare_adquisition(void) {
     /*
-     * All stages must be level 0 (inmediate) and armed
+     * All stages must be level 0 (immediate) and armed
      * Level triggers (1 stage for all level triggers): parallel. Note: also serial size 1, which uses 1 stage for each
-     * trigger Edge trigger (1 stage for each edge trigger): serial size 2
+     * Edge triggers (serial, size 2)
      */
+
+    for (uint i = 0; i < TRIGGERS_COUNT; i++) {
+        capture_config_.trigger[i].is_enabled = false;
+    }
 
     uint trigger_count = 0;
     for (uint stage = 0; stage < STAGES_COUNT; stage++) {
-        capture_config_.trigger[trigger_count].is_enabled = 0;
         debug_block("\nStage: %u Mask: 0x%00000000X Values: 0x%00000000X Configuration: 0x%00000000X", stage,
                     sump_trigger_[stage].mask, sump_trigger_[stage].values, sump_trigger_[stage].configuration);
-        if (sump_trigger_[stage].mask && ((sump_trigger_[stage].configuration & TRIGGER_START) &&
-                                          (sump_trigger_[stage].configuration & TRIGGER_LEVEL_MASK) == 0)) {
+
+        if (sump_trigger_[stage].mask &&
+            ((sump_trigger_[stage].configuration & TRIGGER_START) &&
+             ((sump_trigger_[stage].configuration & TRIGGER_LEVEL_MASK) == 0))) {
             // level triggers (parallel trigger)
             if (!(sump_trigger_[stage].configuration & TRIGGER_SERIAL)) {
                 for (uint channel = 0; channel < config_.channels; channel++) {
-                    if ((sump_trigger_[stage].mask >> channel) & 1) {
+                    if (((sump_trigger_[stage].mask >> channel) & 1) != 0) {
                         capture_config_.trigger[trigger_count].is_enabled = true;
                         capture_config_.trigger[trigger_count].pin = channel;
+
                         if (!config_.trigger_edge) {
-                            if ((sump_trigger_[stage].values >> channel) & 1 == 1)
+                            if (((sump_trigger_[stage].values >> channel) & 1) == 1)
                                 capture_config_.trigger[trigger_count].match = TRIGGER_TYPE_LEVEL_HIGH;
                             else
                                 capture_config_.trigger[trigger_count].match = TRIGGER_TYPE_LEVEL_LOW;
                         } else {
-                            if ((sump_trigger_[stage].values >> channel) & 1 == 1)
+                            if (((sump_trigger_[stage].values >> channel) & 1) == 1)
                                 capture_config_.trigger[trigger_count].match = TRIGGER_TYPE_EDGE_HIGH;
                             else
                                 capture_config_.trigger[trigger_count].match = TRIGGER_TYPE_EDGE_LOW;
                         }
+
                         trigger_count++;
                         if (trigger_count > 3) {
                             debug("\nTrigger ignored. Reached maximum number of triggers (%u)", TRIGGERS_COUNT);
@@ -331,30 +338,40 @@ static inline void prepare_adquisition(void) {
                 capture_config_.trigger[trigger_count].is_enabled = true;
                 capture_config_.trigger[trigger_count].pin =
                     (sump_trigger_[stage].configuration & TRIGGER_CHANNEL_MASK) >> 20;
-                if ((sump_trigger_[stage].values & 1) == 0 && ((sump_trigger_[stage].values >> 1) & 1) == 1) {
+
+                if (((sump_trigger_[stage].values & 1) == 0) && (((sump_trigger_[stage].values >> 1) & 1) == 1)) {
                     capture_config_.trigger[trigger_count].match = TRIGGER_TYPE_EDGE_HIGH;
                     trigger_count++;
-                } else if ((sump_trigger_[stage].values & 1) == 1 && ((sump_trigger_[stage].values >> 1) & 1) == 0) {
+                } else if (((sump_trigger_[stage].values & 1) == 1) &&
+                           (((sump_trigger_[stage].values >> 1) & 1) == 0)) {
                     capture_config_.trigger[trigger_count].match = TRIGGER_TYPE_EDGE_LOW;
                     trigger_count++;
+                } else {
+                    capture_config_.trigger[trigger_count].is_enabled = false;
                 }
             } else if ((sump_trigger_[stage].configuration & TRIGGER_SERIAL) && (sump_trigger_[stage].mask == 0b1)) {
                 capture_config_.trigger[trigger_count].is_enabled = true;
                 capture_config_.trigger[trigger_count].pin =
                     (sump_trigger_[stage].configuration & TRIGGER_CHANNEL_MASK) >> 20;
+
                 if ((sump_trigger_[stage].values & 1) == 1) {
                     capture_config_.trigger[trigger_count].match = TRIGGER_TYPE_LEVEL_HIGH;
                     trigger_count++;
-                } else if ((sump_trigger_[stage].values & 1) == 0) {
+                } else {
                     capture_config_.trigger[trigger_count].match = TRIGGER_TYPE_LEVEL_LOW;
                     trigger_count++;
                 }
             }
+
             if (trigger_count > TRIGGERS_COUNT - 1) {
                 debug("\nTrigger ignored. Reached maximum number of triggers (%u)", TRIGGERS_COUNT);
                 return;
             }
         }
+    }
+
+    if (trigger_count < TRIGGERS_COUNT) {
+        capture_config_.trigger[trigger_count].is_enabled = false;
     }
 }
 
