@@ -396,11 +396,16 @@ static inline void send_sample_rle(uint sample, uint count) {
 }
 
 static inline uint32_t get_uint32(void) {
-    uint32_t value = getchar_timeout_us(1000);
-    value |= getchar_timeout_us(1000) << 8;
-    value |= getchar_timeout_us(1000) << 16;
-    value |= getchar_timeout_us(1000) << 24;
-    return value;
+    /* getchar_timeout_us returns PICO_ERROR_TIMEOUT (-1) on failure.
+     * Accumulating with |= would corrupt the value, so check each byte. */
+    int b0 = getchar_timeout_us(1000);
+    int b1 = getchar_timeout_us(1000);
+    int b2 = getchar_timeout_us(1000);
+    int b3 = getchar_timeout_us(1000);
+    if (b0 == PICO_ERROR_TIMEOUT || b1 == PICO_ERROR_TIMEOUT ||
+        b2 == PICO_ERROR_TIMEOUT || b3 == PICO_ERROR_TIMEOUT)
+        return 0;
+    return (uint32_t)b0 | ((uint32_t)b1 << 8) | ((uint32_t)b2 << 16) | ((uint32_t)b3 << 24);
 }
 
 static inline void put_uint32(uint32_t value) {

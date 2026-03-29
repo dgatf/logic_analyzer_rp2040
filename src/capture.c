@@ -27,6 +27,12 @@
 
 #define PRE_TRIGGER_RING_BITS 10
 #define PRE_TRIGGER_BUFFER_SIZE (1 << PRE_TRIGGER_RING_BITS)
+/* Must be a multiple of PRE_TRIGGER_BUFFER_SIZE so the ring-position formula
+ * (transfers_done % PRE_TRIGGER_BUFFER_SIZE) stays correct across DMA reloads.
+ * 0xffffffff % 1024 == 1023, so using 0xffffffff would introduce a permanent
+ * 1023-entry offset in the start pointer after every reload. */
+#define PRE_TRIGGER_RING_TRANSFER_COUNT \
+    ((0xffffffffu / PRE_TRIGGER_BUFFER_SIZE) * PRE_TRIGGER_BUFFER_SIZE)
 #define POST_TRIGGER_BUFFER_SIZE 100000
 #define MAX_TRIGGER_COUNT 4
 #define RATE_CHANGE_CLK 5000
@@ -34,7 +40,8 @@
 static const uint sm_pre_trigger_ = 0, sm_post_trigger_ = 1, sm_mux_ = 3, dma_channel_pre_trigger_ = 0,
                   dma_channel_post_trigger_ = 1, dma_channel_pio0_ctrl_ = 2, dma_channel_pio1_ctrl_ = 3,
                   dma_channel_reload_pre_trigger_counter_ = 4, dma_channel_trigger_[MAX_TRIGGER_COUNT] = {5, 6, 7, 8},
-                  sm_trigger_[MAX_TRIGGER_COUNT] = {0, 1, 2, 3}, reload_counter_ = 0xffffffff;
+                  sm_trigger_[MAX_TRIGGER_COUNT] = {0, 1, 2, 3},
+                  reload_counter_ = PRE_TRIGGER_RING_TRANSFER_COUNT;
 static uint offset_pre_trigger_, offset_post_trigger_, pre_trigger_samples_, post_trigger_samples_, pre_trigger_count_,
     pin_count_, trigger_count_, sm_trigger_mask_, trigger_mask_, pin_base_, rate_, offset_mux_,
     offset_trigger_[MAX_TRIGGER_COUNT];
@@ -167,7 +174,7 @@ void capture_start(uint samples, uint rate, uint pre_trigger_samples) {
     dma_channel_configure(dma_channel_pre_trigger_, &channel_config_pre_trigger,
                           &pre_trigger_buffer_,         // write address
                           &pio0->rxf[sm_pre_trigger_],  // read address
-                          0xffffffff, true);
+                          PRE_TRIGGER_RING_TRANSFER_COUNT, true);
 
     // Init post trigger
     if (rate > RATE_CHANGE_CLK) {
@@ -261,16 +268,14 @@ uint get_pre_trigger_count(void) { return pre_trigger_count_; }
 int get_triggered_channel(void) { return triggered_channel_; }
 
 static inline void capture_complete_handler(void) {
-    if (clock_get_hz(clk_sys) != 100000000) {
-        set_sys_clock_khz(100000, true);
-        debug_reinit();
-    }
+    /* Acknowledge the IRQ first to avoid spurious re-entry. */
+    dma_hw->ints0 = 1u << dma_channel_post_trigger_;
     if (!is_aborting_) {
         // Set pre trigger range
         pre_trigger_first_ = 0;
         pre_trigger_count_ = 0;
         if (pre_trigger_samples_) {
-            uint transfer_count = 0xffffffff - dma_hw->ch[dma_channel_pre_trigger_].transfer_count;
+            uint transfer_count = PRE_TRIGGER_RING_TRANSFER_COUNT - dma_hw->ch[dma_channel_pre_trigger_].transfer_count;
             pre_trigger_first_ = (int)(transfer_count % PRE_TRIGGER_BUFFER_SIZE) - (int)pre_trigger_samples_;
             pre_trigger_count_ = pre_trigger_samples_;
             if ((pre_trigger_first_ < 0) && (transfer_count < PRE_TRIGGER_BUFFER_SIZE)) {
@@ -284,11 +289,12 @@ static inline void capture_complete_handler(void) {
     } else {
         is_aborting_ = false;
     }
-    dma_hw->ints0 = 1u << dma_channel_post_trigger_;
 }
 
 static inline void trigger_handler(void) {
-    triggered_channel_ = pio_sm_get_blocking(pio0, sm_mux_);
+    /* Data is pushed to the RX FIFO before the IRQ fires (mux program: push then irq),
+     * so a non-blocking read is correct and avoids any risk of deadlock in ISR context. */
+    triggered_channel_ = pio_sm_get(pio0, sm_mux_);
     pio_interrupt_clear(pio0, 0);
 }
 

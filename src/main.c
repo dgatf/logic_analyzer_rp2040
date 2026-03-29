@@ -73,6 +73,14 @@ int main() {
             gpio_put(PICO_DEFAULT_LED_PIN, 0);
         }
         if (send_samples_) {
+            /* The system clock may have been raised to 200 MHz for high-rate
+             * capture. Restore it to 100 MHz here, in main-loop context, before
+             * USB/stdio communication. set_sys_clock_khz is not interrupt-safe
+             * so it must not be called from the DMA completion ISR. */
+            if (clock_get_hz(clk_sys) != 100000000) {
+                set_sys_clock_khz(100000, true);
+                debug_reinit();
+            }
             sump_send_samples();
             gpio_put(PICO_DEFAULT_LED_PIN, 0);
             send_samples_ = false;
